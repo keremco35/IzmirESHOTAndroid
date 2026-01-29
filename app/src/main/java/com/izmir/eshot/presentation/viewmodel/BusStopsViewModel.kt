@@ -72,6 +72,8 @@ class BusStopsViewModel @Inject constructor(
                         } else it
                     }
                 } catch (e: Exception) {
+                    // Log error for debugging
+                    e.printStackTrace()
                     _uiState.update {
                         if (it is BusStopsUiState.Success) {
                             it.copy(

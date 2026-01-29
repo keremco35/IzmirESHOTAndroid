@@ -94,7 +94,11 @@ fun MapScreen(
                 LaunchedEffect(state.selectedStop) {
                     if (state.selectedStop != null) {
                         showBottomSheet = true
-                        sheetState.show()
+                        try {
+                            sheetState.show()
+                        } catch (e: Exception) {
+                            // Sheet state error, ignore
+                        }
                     }
                 }
                 

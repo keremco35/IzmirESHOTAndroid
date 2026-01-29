@@ -8,5 +8,5 @@ data class BusStop(
     val name: String,
     val latitude: Double,
     val longitude: Double,
-    val routes: List<String> // List of bus routes passing through this stop
+    val routes: List<String> = emptyList() // List of bus routes passing through this stop
 )

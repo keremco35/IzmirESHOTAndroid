@@ -25,20 +25,30 @@ class BusStopRepositoryImpl @Inject constructor(
     }
     
     override suspend fun getApproachingBuses(stopId: Int): List<ApproachingBus> = withContext(Dispatchers.IO) {
-        val response = apiService.getApproachingBuses(stopId)
-        response.hatBilgileri?.map { dto ->
-            ApproachingBus(
-                routeNumber = dto.hatNo ?: "",
-                routeName = dto.hatAdi ?: "",
-                direction = dto.yon ?: "",
-                vehicleId = dto.kapiNo ?: "",
-                departureTime = dto.kalkisSaati ?: "",
-                approachingTime = dto.yaklasmaZamani ?: "",
-                latitude = dto.enlem,
-                longitude = dto.boylam,
-                speed = dto.hiz
-            )
-        } ?: emptyList()
+        try {
+            val response = apiService.getApproachingBuses(stopId)
+            response.hatBilgileri?.mapNotNull { dto ->
+                try {
+                    ApproachingBus(
+                        routeNumber = dto.hatNo ?: "",
+                        routeName = dto.hatAdi ?: "",
+                        direction = dto.yon ?: "",
+                        vehicleId = dto.kapiNo ?: "",
+                        departureTime = dto.kalkisSaati ?: "",
+                        approachingTime = dto.yaklasmaZamani ?: "",
+                        latitude = dto.enlem,
+                        longitude = dto.boylam,
+                        speed = dto.hiz
+                    )
+                } catch (e: Exception) {
+                    // Skip malformed bus data
+                    null
+                }
+            } ?: emptyList()
+        } catch (e: Exception) {
+            // Return empty list on any API error
+            emptyList()
+        }
     }
     
     /**
