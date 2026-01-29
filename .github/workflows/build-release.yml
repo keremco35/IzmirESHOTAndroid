@@ -11,6 +11,10 @@ on:
         required: true
         default: 'v1.0.0'
 
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   build:
     name: Build APK
@@ -37,7 +41,7 @@ jobs:
           echo "MAPS_API_KEY=${{ secrets.MAPS_API_KEY }}" > secrets.properties
 
       - name: Build Debug APK
-        run: gradle assembleDebug --no-daemon --build-cache --parallel
+        run: ./gradlew assembleDebug --no-daemon --build-cache --parallel
 
       - name: Get version name
         id: version
@@ -59,7 +63,7 @@ jobs:
           path: app/build/outputs/apk/debug/IzmirESHOT-${{ steps.version.outputs.VERSION }}-debug.apk
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.VERSION }}
           name: İzmir ESHOT ${{ steps.version.outputs.VERSION }}
@@ -76,8 +80,7 @@ jobs:
             2. Android cihazınızda "Bilinmeyen kaynaklar"ı etkinleştirin
             3. APK'yı yükleyin
             
-          files: |
-            app/build/outputs/apk/debug/IzmirESHOT-${{ steps.version.outputs.VERSION }}-debug.apk
+          files: app/build/outputs/apk/debug/IzmirESHOT-${{ steps.version.outputs.VERSION }}-debug.apk
           draft: false
           prerelease: false
         env:
