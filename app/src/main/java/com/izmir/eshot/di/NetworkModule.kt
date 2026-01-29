@@ -1,12 +1,15 @@
 package com.izmir.eshot.di
 
+import com.izmir.eshot.BuildConfig
 import com.izmir.eshot.data.api.EshotApiService
+import com.izmir.eshot.data.network.RetryInterceptor
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -18,7 +21,13 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
-    
+
+    private const val CONNECT_TIMEOUT_SECONDS = 15L
+    private const val READ_TIMEOUT_SECONDS = 30L
+    private const val WRITE_TIMEOUT_SECONDS = 30L
+    private const val CONNECTION_POOL_IDLE_COUNT = 5
+    private const val CONNECTION_POOL_KEEP_ALIVE_MINUTES = 5L
+
     @Provides
     @Singleton
     fun provideMoshi(): Moshi {
@@ -26,22 +35,39 @@ object NetworkModule {
             .addLast(KotlinJsonAdapterFactory())
             .build()
     }
-    
+
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient {
+    fun provideConnectionPool(): ConnectionPool {
+        return ConnectionPool(
+            CONNECTION_POOL_IDLE_COUNT,
+            CONNECTION_POOL_KEEP_ALIVE_MINUTES,
+            TimeUnit.MINUTES
+        )
+    }
+
+    @Provides
+    @Singleton
+    fun provideOkHttpClient(connectionPool: ConnectionPool): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = if (BuildConfig.DEBUG) {
+                HttpLoggingInterceptor.Level.BODY
+            } else {
+                HttpLoggingInterceptor.Level.NONE
+            }
         }
-        
+
         return OkHttpClient.Builder()
+            .connectionPool(connectionPool)
             .addInterceptor(loggingInterceptor)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
+            .addInterceptor(RetryInterceptor(maxRetries = 3))
+            .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
             .build()
     }
-    
+
     @Provides
     @Singleton
     @Named("FilesRetrofit")
@@ -52,7 +78,7 @@ object NetworkModule {
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
     }
-    
+
     @Provides
     @Singleton
     @Named("ApiRetrofit")
@@ -63,14 +89,14 @@ object NetworkModule {
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
     }
-    
+
     @Provides
     @Singleton
     @Named("FilesApiService")
     fun provideFilesApiService(@Named("FilesRetrofit") retrofit: Retrofit): EshotApiService {
         return retrofit.create(EshotApiService::class.java)
     }
-    
+
     @Provides
     @Singleton
     @Named("ApiService")

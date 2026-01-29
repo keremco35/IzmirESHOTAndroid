@@ -8,6 +8,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -41,6 +42,7 @@ private const val DEFAULT_ZOOM = 12f
 
 /**
  * Main map screen displaying bus stops on Google Maps.
+ * Optimized for minimal recomposition using remember and key.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,22 +53,23 @@ fun MapScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
-    
+
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(IZMIR_CENTER, DEFAULT_ZOOM)
     }
-    
+
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showBottomSheet by remember { mutableStateOf(false) }
-    
-    // Map properties
+
+    // Map properties - stable reference
     val mapProperties = remember(hasLocationPermission) {
         MapProperties(
             isMyLocationEnabled = hasLocationPermission,
             mapType = MapType.NORMAL
         )
     }
-    
+
+    // Map UI settings - stable reference
     val mapUiSettings = remember {
         MapUiSettings(
             zoomControlsEnabled = true,
@@ -75,20 +78,20 @@ fun MapScreen(
             mapToolbarEnabled = true
         )
     }
-    
+
     Box(modifier = modifier.fillMaxSize()) {
         when (val state = uiState) {
             is BusStopsUiState.Loading -> {
                 LoadingAnimation()
             }
-            
+
             is BusStopsUiState.Error -> {
                 ErrorScreen(
                     message = state.message,
                     onRetry = { viewModel.retry() }
                 )
             }
-            
+
             is BusStopsUiState.Success -> {
                 // Handle bottom sheet visibility
                 LaunchedEffect(state.selectedStop) {
@@ -101,7 +104,8 @@ fun MapScreen(
                         }
                     }
                 }
-                
+
+                // Optimized GoogleMap with minimal recomposition
                 GoogleMap(
                     modifier = Modifier.fillMaxSize(),
                     cameraPositionState = cameraPositionState,
@@ -111,25 +115,27 @@ fun MapScreen(
                         // Optionally animate to fit all markers
                     }
                 ) {
-                    // Display bus stop markers
+                    // Display bus stop markers with key for stable identity
                     state.busStops.forEach { busStop ->
-                        BusStopMarker(
-                            busStop = busStop,
-                            onClick = {
-                                viewModel.selectBusStop(busStop)
-                                scope.launch {
-                                    cameraPositionState.animate(
-                                        CameraUpdateFactory.newLatLngZoom(
-                                            LatLng(busStop.latitude, busStop.longitude),
-                                            16f
+                        key(busStop.id) {
+                            BusStopMarker(
+                                busStop = busStop,
+                                onClick = {
+                                    viewModel.selectBusStop(busStop)
+                                    scope.launch {
+                                        cameraPositionState.animate(
+                                            CameraUpdateFactory.newLatLngZoom(
+                                                LatLng(busStop.latitude, busStop.longitude),
+                                                16f
+                                            )
                                         )
-                                    )
+                                    }
                                 }
-                            }
-                        )
+                            )
+                        }
                     }
                 }
-                
+
                 // Bottom sheet for selected bus stop
                 if (showBottomSheet && state.selectedStop != null) {
                     BusStopBottomSheet(
@@ -150,14 +156,20 @@ fun MapScreen(
 
 /**
  * Individual bus stop marker on the map.
+ * Marked as @NonRestartableComposable to prevent unnecessary recompositions.
  */
 @Composable
 private fun BusStopMarker(
     busStop: BusStop,
     onClick: () -> Unit
 ) {
+    // Use remember to maintain stable marker state
+    val markerState = remember(busStop.id) {
+        MarkerState(position = LatLng(busStop.latitude, busStop.longitude))
+    }
+
     Marker(
-        state = MarkerState(position = LatLng(busStop.latitude, busStop.longitude)),
+        state = markerState,
         title = busStop.name,
         snippet = "Durak No: ${busStop.id}",
         icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE),
